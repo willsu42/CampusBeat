@@ -1,13 +1,20 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson import ObjectId
 from db import get_db  
 from flask import session
+from datetime import datetime
+
+
 
 app = Flask(__name__)
-
-
 db = get_db()
+
+@app.route('/')
+def index():
+    return render_template('music.html')
+
+
 
 # Sign-Up (User Registration) Route
 from werkzeug.security import generate_password_hash
@@ -94,9 +101,9 @@ def get_songs():
 
 
 # search bar
-@app.route('/search_songs', methods=['GET'])
-def search_songs():
-    query = request.args.get('query')
+@app.route('/search', methods=['GET'])
+def search():
+    query = request.args.get('search')
     if not query:
         return jsonify({"error": "Search query is required"}), 400
 
@@ -113,11 +120,16 @@ def search_songs():
         songs_list = []
         for song in search_results:
             song_data = {
+                "_id": str(song["_id"]),  # Convert ObjectId to string
                 "title": song.get("Title", "Unknown Title"),
                 "artist": song.get("Detail", {}).get("Artist", "Unknown Artist"),
                 "album": song.get("Detail", {}).get("Album", "Unknown Album"),
-                "duration": song.get("Detail", {}).get("Duration", "Unknown Duration")
+                "duration": song.get("Detail", {}).get("Duration", "Unknown Duration"),
+                "play_count": song.get("PlayCount", 0)
+
             }
+           # print(song)  # inspect one result
+
             songs_list.append(song_data)
 
         if songs_list:
@@ -219,6 +231,7 @@ def get_top_songs():
         
 
         result.append({
+            "_id": str(song["_id"]),  # REQUIRED for addToPlaylist(song._id)
             "title": song.get("Title"),
             "artist": artist,
             "play_count": song.get("PlayCount")
@@ -226,6 +239,139 @@ def get_top_songs():
     
     return jsonify(result), 200
 
+@app.route('/add-to-playlist', methods=['POST'])
+def add_to_playlist():
+    try:
+        data = request.get_json()
+        print("Received data:", data)  # ✅ Log the incoming data
+
+        playlist_id = data.get('playlist_id')
+        song_id = data.get('song_id')
+
+        if not playlist_id or not song_id:
+            return jsonify({"error": "Missing playlist_id or song_id"}), 400
+
+        db.CONTAINS.insert_one({
+            "PlaylistID": ObjectId(playlist_id),
+            "SongID": ObjectId(song_id),
+            "created_at": datetime.utcnow()
+        })
+
+        return jsonify({"status": "ok", "message": "Song added to playlist."})
+
+    except Exception as e:
+        print("Error in /add-to-playlist:", e)  # Log the error
+        return jsonify({"error": "Insert failed", "details": str(e)}), 500
+
+
+
+@app.route('/get-playlists')
+def get_playlists():
+    try:
+        playlists = db.PLAYLIST.find({}, {"_id": 1, "Name": 1})  # Only return _id and name
+        return jsonify([
+            {"_id": str(p["_id"]), "name": p.get("Name", "Untitled")}
+            for p in playlists
+        ])
+
+    except Exception as e:
+        return jsonify({"error": "Failed to fetch playlists", "details": str(e)}), 500
+
+@app.route('/playlist/<playlist_id>')
+def get_playlist_songs(playlist_id):
+    try:
+        # Step 1: Get all song ObjectIds linked to the playlist
+        links = db.CONTAINS.find({"PlaylistID": ObjectId(playlist_id)})
+        song_ids = [link["SongID"] for link in links]
+
+        if not song_ids:
+            return jsonify([])  # Empty playlist
+
+        # Step 2: Fetch songs using those ObjectIds
+        songs = db.SONG.find(
+            {"_id": {"$in": song_ids}},
+            {
+                "Title": 1,
+                "Detail.Artist": 1,
+                "Detail.Genre": 1,
+                "Detail.Album": 1,     # ✅ add this
+                "Detail.Duration": 1,  # ✅ and this
+                "PlayCount": 1
+            }
+        ).sort("Title", 1)
+
+
+        # Step 3: Format and return
+        result = []
+        for song in songs:
+            result.append({
+                "id": str(song["_id"]),
+                "title": song.get("Title", "Unknown Title"),  # ✅ renamed to 'title'
+                "artist": song.get("Detail", {}).get("Artist", "Unknown Artist"),
+                "album": song.get("Detail", {}).get("Album", "Unknown Album"),
+                "duration": song.get("Detail", {}).get("Duration", "Unknown Duration"),
+                "play_count": song.get("PlayCount", 0)
+            })
+
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": "Failed to load playlist", "details": str(e)}), 500
+
+@app.route('/remove-from-playlist', methods=['POST'])
+def remove_from_playlist():
+    data = request.get_json()
+    playlist_id = data.get('playlist_id')
+    song_id = data.get('song_id')
+
+    if not playlist_id or not song_id:
+        return jsonify({"error": "Missing playlist_id or song_id"}), 400
+
+    try:
+        result = db.CONTAINS.delete_one({
+            "PlaylistID": ObjectId(playlist_id),
+            "SongID": ObjectId(song_id)
+        })
+
+        if result.deleted_count == 0:
+            return jsonify({"error": "Song not found in playlist"}), 404
+
+        return jsonify({"status": "ok", "message": "Song removed from playlist"})
+    except Exception as e:
+        return jsonify({"error": "Failed to remove song", "details": str(e)}), 500
+
+@app.route('/recommend-by-genre')
+def recommend_by_genre():
+    genre = request.args.get('genre')
+    if not genre:
+        return jsonify({"error": "Genre required"}), 400
+
+    try:
+        recommendations = db.SONG.find(
+            {"Detail.Genre": genre},
+            {
+                "Title": 1,
+                "Detail.Artist": 1,
+                "Detail.Album": 1,
+                "Detail.Duration": 1,
+                "PlayCount": 1
+            }
+        ).sort("PlayCount", -1).limit(10)
+
+        result = []
+        for song in recommendations:
+            result.append({
+                "id": str(song["_id"]),
+                "title": song.get("Title"),
+                "artist": song.get("Detail", {}).get("Artist"),
+                "album": song.get("Detail", {}).get("Album"),
+                "duration": song.get("Detail", {}).get("Duration"),
+                "play_count": song.get("PlayCount", 0)
+            })
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": "Failed to recommend songs", "details": str(e)}), 500
 
 
 # Run the Flask app

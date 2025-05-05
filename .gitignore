@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Node
+node_modules/
+
+# VS Code settings
+.vscode/
+
+# Logs and temp files
+*.log
+*.zip
+*.mp4
+.DS_Store
+
+# Flask static uploads or cache
+static/uploads/
+instance/
+.env

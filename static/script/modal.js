@@ -1,10 +1,29 @@
-// -------------- LOAD "MY COLLECTION" --------------
+// // -------------- LOAD "MY COLLECTION" --------------
+// document.getElementById("collectionLink").addEventListener("click", (e) => {
+//   e.preventDefault();
+//   document.getElementById("collectionSection").style.display = "block";
+//   document.querySelector(".home").style.display = "none";
+//   loadMyCollection();
+// });
 document.getElementById("collectionLink").addEventListener("click", (e) => {
   e.preventDefault();
+
+  const playlistId = document.getElementById("playlistSelect").value;
+  console.log("🎯 Playlist ID selected:", playlistId); 
+
+  if (!playlistId) {
+    alert("Please select a playlist first.");
+    return;
+  }
+
   document.getElementById("collectionSection").style.display = "block";
   document.querySelector(".home").style.display = "none";
-  loadMyCollection();
+  document.getElementById("collectionTitle").textContent = "🎵 Your Playlist";
+
+  loadPlaylistSongs(playlistId);
 });
+
+
 
 // -------------- LOAD "HOME" --------------
 document.getElementById("homeLink").addEventListener("click", (e) => {
@@ -19,10 +38,10 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 
-// -------------- LOAD TOP 5 SONGS --------------
+// -------------- LOAD TOP 3 SONGS --------------
 async function loadTopSongs() {
   try {
-    let response = await fetch('/top-songs');
+    let response = await fetch('/top_songs');
     if (!response.ok) throw new Error(`Status ${response.status}`);
     let topSongs = await response.json();
 
@@ -33,12 +52,13 @@ async function loadTopSongs() {
       const item = document.createElement("div");
       item.className = "top-song-item";
       item.innerHTML = `
-        <span>${song.name} - ${song.artist} (${song.likes} likes)</span>
+        <span>${song.title} - ${song.artist} (${song.play_count} plays)</span>
         <button class="add-btn">+</button>
       `;
       // Add click event
       item.querySelector('.add-btn').addEventListener('click', () => {
-        addToCollection(song);
+        addToPlaylist(song._id);
+        //addToCollection(song);
       });
       container.appendChild(item);
     });
@@ -77,12 +97,14 @@ async function performSearch() {
       div.style.color = "white";
 
       div.innerHTML = `
-        <span>${song.name} - ${song.artist} (${song.likes} likes)</span>
+        <span>${song.title} - ${song.artist} | ${song.album} (${song.play_count} plays, ${song.duration})
+        </span>
         <button class="add-btn">+</button>
       `;
       // Add "click" listener to the + button
       div.querySelector('.add-btn').addEventListener('click', () => {
-        addToCollection(song);
+        console.log("Adding song to playlist:", song._id);  // ✅ debug log
+        addToPlaylist(song._id);
       });
       container.appendChild(div);
     });
@@ -92,20 +114,48 @@ async function performSearch() {
 }
 
 
-// -------------- ADD TO COLLECTION --------------
-async function addToCollection(song) {
+// // -------------- ADD TO COLLECTION --------------
+// async function addToCollection(song) {
+//   try {
+//     let response = await fetch('/add-to-collection', {
+//       method: 'POST',
+//       headers: { 'Content-Type': 'application/json' },
+//       body: JSON.stringify(song)
+//     });
+//     let result = await response.json();
+//     alert(result.message || "Song added!");
+//   } catch (err) {
+//     console.error("Error adding to collection:", err);
+//   }
+// }
+
+async function addToPlaylist(songId) {
+  const playlistId = document.getElementById("playlistSelect").value;
+
+  if (!playlistId) {
+    alert("Please select a playlist first.");
+    return;
+  }
+
   try {
-    let response = await fetch('/add-to-collection', {
+    const response = await fetch('/add-to-playlist', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(song)
+      body: JSON.stringify({
+        song_id: songId,
+        playlist_id: playlistId
+      })
     });
-    let result = await response.json();
-    alert(result.message || "Song added!");
+
+    const result = await response.json();
+    alert(result.message || "Song added to playlist!");
   } catch (err) {
-    console.error("Error adding to collection:", err);
+    console.error("Error adding to playlist:", err);
   }
 }
+
+
+
 
 // -------------- LOAD "MY COLLECTION" --------------
 async function loadMyCollection() {
@@ -150,3 +200,134 @@ async function removeFromCollection(songId) {
     console.error("Error removing song:", err);
   }
 }
+
+async function loadPlaylists() {
+  
+  try {
+    const response = await fetch('/get-playlists');
+    const playlists = await response.json();
+    const select = document.getElementById('playlistSelect');
+    select.innerHTML = '<option value="">Select Playlist</option>'; // Reset
+
+    playlists.forEach(pl => {
+      const option = document.createElement('option');
+      option.value = pl._id;
+      option.textContent = pl.name;
+      select.appendChild(option);
+    });
+  } catch (err) {
+    console.error("Failed to load playlists:", err);
+  }
+}
+
+
+window.onload = function () {
+  loadPlaylists();  // ✅ This will run after the page fully loads
+};
+
+async function loadPlaylistSongs(playlistId) {
+  console.log("📣 loadPlaylistSongs called with:", playlistId);
+
+  if (!playlistId) {
+    console.warn("No playlist ID provided.");
+    return;
+  }
+
+  try {
+    const response = await fetch(`/playlist/${playlistId}`);
+    const songs = await response.json();
+    console.log("🎵 Songs loaded:", songs);
+
+    const container = document.getElementById("playlistSongsContainer");
+    if (!container) {
+      console.error("❌ Container #playlistSongsContainer not found in HTML.");
+      return;
+    }
+
+    container.innerHTML = "";
+
+    if (songs.length === 0) {
+      container.innerHTML = "<p>No songs in this playlist yet.</p>";
+      return;
+    }
+
+    songs.forEach(song => {
+      const div = document.createElement("div");
+      div.className = "playlist-song-item";
+      div.innerHTML = `
+        ${song.title} - ${song.artist} || ${song.album} (${song.play_count} plays, ${song.duration})
+       <button class="remove-btn">Remove</button>
+        `;
+      
+      // ✅ Add remove button functionality
+      div.querySelector(".remove-btn").addEventListener("click", () => {
+      const playlistId = document.getElementById("playlistSelect").value;
+      removeFromPlaylist(song.id, playlistId);
+      });
+      container.appendChild(div);
+    });
+  } catch (err) {
+    console.error("❌ Error loading playlist songs:", err);
+  }
+}
+
+async function removeFromPlaylist(songId, playlistId) {
+  try {
+    const response = await fetch('/remove-from-playlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ song_id: songId, playlist_id: playlistId })
+    });
+
+    const result = await response.json();
+    if (response.ok) {
+      alert(result.message);
+      loadPlaylistSongs(playlistId); // ✅ Refresh the list
+    } else {
+      console.error("❌ Remove error:", result);
+      alert(result.error || "Failed to remove song.");
+    }
+  } catch (err) {
+    console.error("❌ Request error:", err);
+  }
+}
+
+async function loadRecommendationsByGenre() {
+  const genre = document.getElementById("genreDropdown").value;
+  if (!genre) {
+    alert("Please select a genre.");
+    return;
+  }
+
+  try {
+    const response = await fetch(`/recommend-by-genre?genre=${encodeURIComponent(genre)}`);
+    const songs = await response.json();
+    const container = document.getElementById("recommendationContainer");
+    container.innerHTML = "";
+
+    if (!songs || songs.length === 0) {
+      container.innerHTML = "<p>No recommendations found for this genre.</p>";
+      return;
+    }
+
+    songs.forEach(song => {
+      const div = document.createElement("div");
+      div.className = "recommendation-item";
+      div.innerHTML = `
+        <strong>${song.title}</strong> - ${song.artist} | ${song.album} (${song.duration})<br>
+        Plays: ${song.play_count}
+        <button class="add-btn">Add +</button>
+      `;
+
+      div.querySelector(".add-btn").addEventListener("click", () => {
+        const playlistId = document.getElementById("playlistSelect").value;
+        addToPlaylist(song.id, playlistId);
+      });
+
+      container.appendChild(div);
+    });
+  } catch (err) {
+    console.error("Error fetching genre recommendations:", err);
+  }
+}
+

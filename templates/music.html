@@ -16,13 +16,13 @@
       <ul class="nav-links">
         <li><a href="home" id="homeLink">Home</a></li>
         <li><a href="collection" id="collectionLink">My Lists</a></li>
-        <li><a href="login" id="loginlink">My Lists</a></li>
+        <li><a href="login" id="loginlink">Log In/Out</a></li> 
       </ul>
       
     </nav>
   </header>
 
-  <!-- Home Section with Search & Top 5 -->
+  <!-- Home Section with Search & Top 3 -->
   <section class="home">
     <div class="home-content">
       <h1>DISCOVER YOUR NEXT FAVORITE SONG</h1>
@@ -32,13 +32,21 @@
         <button id="searchButton" onclick="performSearch()">Search</button>
       </div>
 
+      <div class="playlist-select">
+        <label for="playlistSelect">➕ Add to Playlist:</label>
+        <select id="playlistSelect">
+          <option value="">Select Playlist</option>
+        </select>
+      </div>
+      
       <div id="searchResults"></div>
+      
          <!-- Dynamically populated by function performSearch() in modal.js -->
     </div>
 
     <!-- Show top 5 songs by likes -->
     <div class="home-right">
-      <h2>Top 5 Songs</h2>
+      <h2>Top 3 Songs</h2>
       <div id="topSongsContainer">
         <!-- Dynamically populated by function loadTopSongs() in modal.js -->
       </div>
@@ -47,9 +55,28 @@
 
   <section id="collectionSection">
     <h2 id="collectionTitle"> Your List</h2>
-    <div id="collectionContainer"></div>
-      <!-- Dynamically populated by function loadMyCollection() in modal.js -->
+    <div id="playlistSongsContainer"></div>  <!-- ✅ updated ID -->
   </section>
+  <!-- 🔥 Recommendation Section -->
+<section id="recommendationSection">
+  <h2>💡 Recommended Songs</h2>
+
+  <div id="genreSelector">
+    <label for="genreDropdown">🎵 Choose Genre:</label>
+    <select id="genreDropdown">
+      <option value="">-- Select Genre --</option>
+      <option value="Pop">Pop</option>
+      <option value="Rock">Rock</option>
+      <option value="Jazz">Jazz</option>
+      <option value="Funk">Funk</option>
+      <option value="Soul">Soul</option>
+    </select>
+    <button onclick="loadRecommendationsByGenre()">Get Suggestions</button>
+  </div>
+
+  <div id="recommendationContainer"></div>
+</section>
+
 
 </body>
 </html>
