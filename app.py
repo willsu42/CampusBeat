@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, redirect, url_for,flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson import ObjectId
 from db import get_db  
@@ -8,61 +8,126 @@ from datetime import datetime
 
 
 app = Flask(__name__)
+app.secret_key = 'is455'  # Change this to something secure in production
 db = get_db()
 
 @app.route('/')
-def index():
-    return render_template('music.html')
+
+def homepage():
+    """
+    Redirects the user to the login page.
+    """
+    return redirect(url_for('login'))
+
 
 
 
 # Sign-Up (User Registration) Route
 from werkzeug.security import generate_password_hash
 
-@app.route('/signup', methods=['POST'])
+@app.route('/signup', methods=['GET', 'POST'])
 def signup():
-    user_data = request.get_json()
+    if request.method == 'POST':
+        name = request.form.get('username')
+        email = request.form.get('username')  # or adjust if using separate email field
+        password = request.form.get('password')
+
+        # Check if email exists
+        if db.USER.find_one({"Email": email}):
+            flash("Email already registered.", "warning")
+            return redirect(url_for('signup'))
+
+        db.USER.insert_one({
+            "Name": name,
+            "Email": email,
+            "Password": password,
+            "PreferredGenres": []
+        })
+        flash("Account created! Please log in.", "success")
+        return redirect(url_for('login'))
+
+    return render_template('login.html', is_login=False)  # Show signup form
+
+# @app.route('/signup', methods=['POST'])
+# def signup():
+#     user_data = request.get_json()
 
    
-    if not user_data.get('Name') or not user_data.get('Email') or not user_data.get('Password'):
-        return jsonify({"error": "Missing required fields"}), 400
+#     if not user_data.get('Name') or not user_data.get('Email') or not user_data.get('Password'):
+#         return jsonify({"error": "Missing required fields"}), 400
 
     
-    new_user = {
-        "Name": user_data['Name'],
-        "Email": user_data['Email'],
-        "Password": user_data['Password'],  
-        "PreferredGenres": user_data.get('PreferredGenres', [])
-    }
+#     new_user = {
+#         "Name": user_data['Name'],
+#         "Email": user_data['Email'],
+#         "Password": user_data['Password'],  
+#         "PreferredGenres": user_data.get('PreferredGenres', [])
+#     }
 
     
-    db.USER.insert_one(new_user)
-    return jsonify({"message": "User registered successfully!"}), 201
+#     db.USER.insert_one(new_user)
+#     return jsonify({"message": "User registered successfully!"}), 201
 
 
-# Login Route (User Authentication)
-@app.route('/login', methods=['POST'])
+# # Login Route (User Authentication)
+# @app.route('/login', methods=['POST'])
+# def login():
+#     data = request.get_json()  
+#     email = data.get('email')
+#     password = data.get('password')
+
+#     if not email or not password:
+#         return jsonify({"error": "Email and password are required"}), 400
+
+    
+#     user = db.USER.find_one({"Email": email})
+
+#     if not user:
+#         return jsonify({"error": "Invalid email or password"}), 401
+
+   
+#     if user['Password'] != password:
+#         return jsonify({"error": "Invalid email or password"}), 401
+    
+#     user_id_str = str(user['_id'])
+    
+#     return jsonify({"message": "Login successful", "user_id": user_id_str}), 200
+
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    data = request.get_json()  
-    email = data.get('email')
-    password = data.get('password')
+    if request.method == 'POST':
+        email = request.form.get('username')
+        password = request.form.get('password')
 
-    if not email or not password:
-        return jsonify({"error": "Email and password are required"}), 400
+        if not email or not password:
+            flash("Email and password are required.", "danger")
+            return redirect(url_for('login'))
 
-    
-    user = db.USER.find_one({"Email": email})
+        user = db.USER.find_one({"Email": email})
+        if not user or user['Password'] != password:
+            flash("Invalid email or password.", "danger")
+            return redirect(url_for('login'))
 
-    if not user:
-        return jsonify({"error": "Invalid email or password"}), 401
+        session['username'] = email  # store session
+        return redirect(url_for('music'))  # go to protected page
 
-   
-    if user['Password'] != password:
-        return jsonify({"error": "Invalid email or password"}), 401
-    
-    user_id_str = str(user['_id'])
-    
-    return jsonify({"message": "Login successful", "user_id": user_id_str}), 200
+    # GET request shows the login form
+    return render_template('login.html', is_login=True)
+
+@app.route('/music')
+def music():
+    if 'username' not in session:
+        flash("Please log in first.", "warning")
+        return redirect(url_for('login'))
+
+    return render_template('music.html', username=session['username'])
+
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    flash("You’ve been logged out.", "info")
+    return redirect(url_for('login'))
 
 
 
