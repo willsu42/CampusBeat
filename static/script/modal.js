@@ -247,7 +247,8 @@ async function loadPlaylistSongs(playlistId) {
     container.innerHTML = "";
 
     if (songs.length === 0) {
-      container.innerHTML = "<p>No songs in this playlist yet.</p>";
+      container.innerHTML = '<p style="color: white;">No songs in this playlist yet.</p>';
+
       return;
     }
 
